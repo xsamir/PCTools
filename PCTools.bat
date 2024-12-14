@@ -1,51 +1,84 @@
-Imports System.Diagnostics
-Imports System.IO
-Imports System.Threading
+@echo off
 
-Public Class MainForm
-    Private Sub MainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        Me.Text = "PCTools - Version 0.5 beta"
-        lblDeveloper.Text = "Developer: WaqWaq.sa"
-        lblContact.Text = "Contact: info@WaqWaq.sa | +966-11-2210799 | Riyadh, Saudi Arabia"
-    End Sub
+whoami /groups | find "S-1-5-32-544" >nul 2>&1
+if errorlevel 1 (
+    echo This script requires administrator privileges.
+    pause
+    exit /b
+)
 
-    Private Sub btnSetInterval_Click(sender As Object, e As EventArgs) Handles btnSetInterval.Click
-        Dim interval As Integer
+:menu
+cls
+color 0a
+echo ==============================================
+echo         RAM Cache Cleaner Script
+echo ==============================================
+echo.
+echo 1. Set cache cleaning interval and start task
+echo 2. Cancel the scheduled cleaning task
+echo 3. Exit
+echo ==============================================
+set /p choice=Select an option [1-3]: 
 
-        If Not Integer.TryParse(txtInterval.Text, interval) OrElse interval < 1 Then
-            MessageBox.Show("Please enter a valid interval in minutes.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            Return
-        End If
+if "%choice%"=="1" goto set_interval
+if "%choice%"=="2" goto cancel_task
+if "%choice%"=="3" exit
 
-        Dim intervalSeconds = interval * 60
-        Dim taskName = "RAMCacheCleaner"
+goto menu
 
-        Try
-            ' Delete existing task
-            Process.Start("schtasks", $"/delete /tn {taskName} /f").WaitForExit()
+:set_interval
+cls
+color 0e
+set /p interval=Please enter the cache cleaning interval in minutes (e.g., 60 for 1 hour): 
 
-            ' Create new task
-            Dim taskCommand = $"/create /tn {taskName} /tr \"{Application.ExecutablePath}\" /sc minute /mo {interval} /rl highest /f"
-            Process.Start("schtasks", taskCommand).WaitForExit()
+if "%interval%"=="" goto set_interval
+if not "%interval%" geq "1" goto set_interval
 
-            MessageBox.Show($"Task created successfully to clean cache every {interval} minute(s).", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        Catch ex As Exception
-            MessageBox.Show("Failed to create the task. Ensure you have administrative privileges.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
-    End Sub
+set /a interval_sec=%interval%*60
+set task_name=RAMCacheCleaner
+schtasks /query /tn %task_name% >nul 2>&1
+if not errorlevel 1 (
+    schtasks /delete /tn %task_name% /f
+)
 
-    Private Sub btnCancelTask_Click(sender As Object, e As EventArgs) Handles btnCancelTask.Click
-        Dim taskName = "RAMCacheCleaner"
+schtasks /create /tn %task_name% /tr "%~f0" /sc minute /mo %interval% /rl highest /f
+if errorlevel 1 (
+    echo Failed to create a scheduled task. Ensure you have administrative privileges.
+    pause
+    exit /b
+)
 
-        Try
-            Process.Start("schtasks", $"/delete /tn {taskName} /f").WaitForExit()
-            MessageBox.Show("Scheduled cleaning task successfully canceled.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        Catch ex As Exception
-            MessageBox.Show("No task found to cancel or insufficient permissions.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-        End Try
-    End Sub
+cls
+color 0a
+echo ==============================================
+echo Task successfully created.
+echo The script will run automatically every %interval% minute(s).
+echo ==============================================
+pause
+exit
 
-    Private Sub btnExit_Click(sender As Object, e As EventArgs) Handles btnExit.Click
-        Application.Exit()
-    End Sub
-End Class
+:cancel_task
+cls
+color 0c
+set task_name=RAMCacheCleaner
+schtasks /query /tn %task_name% >nul 2>&1
+if errorlevel 1 (
+    echo No scheduled task found to cancel.
+    pause
+    goto menu
+)
+
+schtasks /delete /tn %task_name% /f
+if errorlevel 1 (
+    echo Failed to delete the scheduled task.
+    pause
+    goto menu
+)
+
+cls
+color 0a
+echo ==============================================
+echo Scheduled cleaning task successfully canceled.
+echo ==============================================
+pause
+goto menu
